@@ -1,0 +1,78 @@
+﻿name: webdav-123-webp
+
+on:
+  workflow_dispatch:
+    inputs:
+      lib_wd:
+        description: 'WebDAV 源库路径(不含/webdav前缀)'
+        required: true
+        default: '/古籍PDF/日本国立公文书馆藏宋元本汉籍十六种【1.75GB·126册】'
+      top_name:
+        description: '目标顶层目录名(古方webp/<top-name>)'
+        required: true
+        default: '日本国立公文书馆藏宋元本汉籍十六种'
+      limit:
+        description: '限制处理册数(0=全部)'
+        required: false
+        default: '0'
+      offset:
+        description: '跳过前 N 册'
+        required: false
+        default: '0'
+      book_conc:
+        description: '册并发数'
+        required: false
+        default: '2'
+      upl_conc:
+        description: '页并发数'
+        required: false
+        default: '4'
+      list_file:
+        description: '增量清单文件仓库内相对路径(每行一个PDF绝对路径或书级目录路径)，空=整库'
+        required: false
+        default: ''
+      cat_name:
+        description: '目标顶层下二级分类目录名(可选)'
+        required: false
+        default: ''
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install pymupdf pillow requests
+
+      - name: Run webdav webp engine
+        env:
+          WDAV_USER: ${{ secrets.WDAV_USER }}
+          WDAV_PASS: ${{ secrets.WDAV_PASS }}
+          GUJI_CID: ${{ secrets.GUJI_CID }}
+          GUJI_SEC: ${{ secrets.GUJI_SEC }}
+        run: |
+          python gh_webdav_webp.py \
+            --lib-wd "${{ github.event.inputs.lib_wd }}" \
+            --top-name "${{ github.event.inputs.top_name }}" \
+            --limit "${{ github.event.inputs.limit }}" \
+            --offset "${{ github.event.inputs.offset }}" \
+            --book-conc "${{ github.event.inputs.book_conc }}" \
+            --upl-conc "${{ github.event.inputs.upl_conc }}" \
+            --list-file "${{ github.event.inputs.list_file }}" \
+            --cat-name "${{ github.event.inputs.cat_name }}"
+
+      - name: Upload ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gh_webdav_webp_ledger
+          path: gh_webdav_webp_ledger.jsonl
+          if-no-files-found: ignore
