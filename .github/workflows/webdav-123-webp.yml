@@ -1,4 +1,4 @@
-﻿name: webdav-123-webp
+name: webdav-123-webp
 
 on:
   workflow_dispatch:
@@ -28,21 +28,40 @@ on:
         required: false
         default: '4'
       list_file:
-        description: '增量清单文件仓库内相对路径(每行一个PDF绝对路径或书级目录路径)，空=整库'
+        description: '增量清单文件名(私有数据仓, 每行一个PDF绝对路径或书级目录路径)，空=整库'
         required: false
-        default: ''
+        default: 'med_increment.txt'
       cat_name:
         description: '目标顶层下二级分类目录名(可选)'
         required: false
         default: ''
+
+env:
+  DATA_REPO: w8848/code-webp-data
 
 jobs:
   convert:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Checkout private data repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          token: ${{ secrets.FORGE_TOKEN }}
+          path: data
+          sparse-checkout: |
+            med_increment.txt
+            fanhao_map.json
+
+      - name: Prepare data files
+        run: |
+          cp -f data/med_increment.txt ./med_increment.txt || true
+          cp -f data/fanhao_map.json ./fanhao_map.json || true
+          ls -la med_increment.txt fanhao_map.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
