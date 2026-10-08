@@ -34,111 +34,111 @@ stat = {'ok': 0, 'fail': 0, 'skip': 0}
 
 def _jboheicw(rec):
     with LG_LOCK:
-        with open(LEDGER, 'a', encoding='utf-8') as _gjzvwgnd:
-            _gjzvwgnd.write(json.dumps(rec, ensure_ascii=False) + '\n')
+        with open(LEDGER, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
 
-class _sxoamlhh:
+class _gjzvwgnd:
 
     def __init__(self):
         self.cfg = {'client_id': os.environ['GUJI_CID'], 'client_secret': os.environ['GUJI_SEC']}
         self.s = requests.Session()
         self.s.trust_env = False
-        _jobgcrjv = requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32)
-        self.s.mount('https://', _jobgcrjv)
+        ad = requests.adapters.HTTPAdapter(pool_connections=32, pool_maxsize=32)
+        self.s.mount('https://', ad)
         self.tok = None
         self.lock = threading.Lock()
 
-    def _mpoobazl(self, _retry=0):
+    def _sxoamlhh(self, _retry=0):
         try:
-            _cypckzsq = self.s.post(B123 + '/api/v1/access_token', headers={'Platform': 'open_platform'}, json={'clientID': self.cfg['client_id'], 'clientSecret': self.cfg['client_secret']}, timeout=90)
-            _cypckzsq = _cypckzsq.json()
+            r = self.s.post(B123 + '/api/v1/access_token', headers={'Platform': 'open_platform'}, json={'clientID': self.cfg['client_id'], 'clientSecret': self.cfg['client_secret']}, timeout=90)
+            r = r.json()
         except Exception:
             if _retry < 6:
                 time.sleep(5 * (_retry + 1))
                 print(f'[login] 重试 {_retry + 1}', flush=True)
                 return self._login(_retry + 1)
             raise
-        self.tok = _cypckzsq.get('data', {}).get('accessToken')
+        self.tok = r.get('data', {}).get('accessToken')
         if not self.tok:
-            raise RuntimeError('123 token 失败: ' + str(_cypckzsq)[:200])
+            raise RuntimeError('123 token 失败: ' + str(r)[:200])
 
-    def _tckelbcx(self, method, path, body=None, params=None, _retry=0):
+    def _jobgcrjv(self, method, path, body=None, params=None, _retry=0):
         with self.lock:
             if not self.tok:
                 self._login()
-            _xfwknvyc = self.tok
-        _fcizagyd = {'Platform': 'open_platform', 'Authorization': 'Bearer ' + _xfwknvyc}
+            tok = self.tok
+        h = {'Platform': 'open_platform', 'Authorization': 'Bearer ' + tok}
         if body is not None:
-            _fcizagyd['Content-Type'] = 'application/json'
+            h['Content-Type'] = 'application/json'
         try:
-            _cypckzsq = self.s.request(method, B123 + path, headers=_fcizagyd, params=params, data=json.dumps(body) if body is not None else None, timeout=90)
-            _dvzjgizw = _cypckzsq.json()
+            r = self.s.request(method, B123 + path, headers=h, params=params, data=json.dumps(body) if body is not None else None, timeout=90)
+            j = r.json()
         except Exception:
             if _retry < 6:
                 time.sleep(5 * (_retry + 1))
                 return self.call(method, path, body, params, _retry + 1)
             raise
-        _aqnzacqy = _dvzjgizw.get('code')
-        if _aqnzacqy == 0:
-            return _dvzjgizw
-        _wcnzdbne = str(_dvzjgizw.get('message', ''))
-        if _aqnzacqy == 401 or 'token' in _wcnzdbne.lower():
+        code = j.get('code')
+        if code == 0:
+            return j
+        msg = str(j.get('message', ''))
+        if code == 401 or 'token' in msg.lower():
             with self.lock:
                 self.tok = None
             if _retry < 4:
                 return self.call(method, path, body, params, _retry + 1)
-        if '频繁' in _wcnzdbne or 'exceed' in _wcnzdbne.lower() or 'limit' in _wcnzdbne.lower() or (_aqnzacqy in (429, 5066)):
+        if '频繁' in msg or 'exceed' in msg.lower() or 'limit' in msg.lower() or (code in (429, 5066)):
             if _retry < 12:
                 time.sleep(min(90, 5 * (_retry + 1)))
                 return self.call(method, path, body, params, _retry + 1)
-        raise RuntimeError(f'123 {path} code={_aqnzacqy} {_wcnzdbne[:120]}')
+        raise RuntimeError(f'123 {path} code={code} {msg[:120]}')
 
-    def _jjldsylb(self, fid):
-        _kdrjjtbx, _ixeahvrd = ([], 0)
+    def _mpoobazl(self, fid):
+        out, last = ([], 0)
         while True:
-            _dvzjgizw = self.call('GET', '/api/v2/file/list', params={'parentFileId': fid, 'limit': 100, 'lastFileId': _ixeahvrd})
-            _iaoixqht = _dvzjgizw.get('data', {})
-            _kdrjjtbx += _iaoixqht.get('fileList', [])
-            _ixeahvrd = _iaoixqht.get('lastFileId', -1)
-            if _ixeahvrd == -1:
+            j = self.call('GET', '/api/v2/file/list', params={'parentFileId': fid, 'limit': 100, 'lastFileId': last})
+            d = j.get('data', {})
+            out += d.get('fileList', [])
+            last = d.get('lastFileId', -1)
+            if last == -1:
                 break
-        return [_hxyyugoj for _hxyyugoj in _kdrjjtbx if _hxyyugoj.get('trashed', 0) == 0]
+        return [x for x in out if x.get('trashed', 0) == 0]
 
-    def _jbqcblda(self, parent, name):
-        _dvzjgizw = self.call('POST', '/upload/v1/file/mkdir', body={'parentID': str(parent), 'name': name})
-        return int(_dvzjgizw['data']['dirID'])
+    def _cypckzsq(self, parent, name):
+        j = self.call('POST', '/upload/v1/file/mkdir', body={'parentID': str(parent), 'name': name})
+        return int(j['data']['dirID'])
 
-    def _ocnpgylw(self):
+    def _tckelbcx(self):
         with self.lock:
             if getattr(self, '_updom', None):
                 return self._updom
-        _dvzjgizw = self.call('GET', '/upload/v2/file/domain')
-        _eigezznn = _dvzjgizw['data'][0]
+        j = self.call('GET', '/upload/v2/file/domain')
+        dom = j['data'][0]
         with self.lock:
-            self._updom = _eigezznn
-        return _eigezznn
+            self._updom = dom
+        return dom
 
-    def _egjvxqxb(self, parent, name, data, _retry=0):
-        _wevguxeu = hashlib.md5(data).hexdigest()
+    def _dvzjgizw(self, parent, name, data, _retry=0):
+        etag = hashlib.md5(data).hexdigest()
         try:
-            _eigezznn = self.upload_domain()
+            dom = self.upload_domain()
             with self.lock:
                 if not self.tok:
                     self._login()
-                _xfwknvyc = self.tok
-            _cypckzsq = self.s.post(_eigezznn + '/upload/v2/file/single/create', headers={'Platform': 'open_platform', 'Authorization': 'Bearer ' + _xfwknvyc}, files={'file': (name, data, 'application/octet-stream')}, data={'parentFileID': str(parent), 'filename': name, 'etag': _wevguxeu, 'size': str(len(data)), 'duplicate': '2'}, timeout=180)
-            _dvzjgizw = _cypckzsq.json()
-            if _dvzjgizw.get('code') == 0 and (_dvzjgizw['data'].get('completed') or _dvzjgizw['data'].get('fileID')):
+                tok = self.tok
+            r = self.s.post(dom + '/upload/v2/file/single/create', headers={'Platform': 'open_platform', 'Authorization': 'Bearer ' + tok}, files={'file': (name, data, 'application/octet-stream')}, data={'parentFileID': str(parent), 'filename': name, 'etag': etag, 'size': str(len(data)), 'duplicate': '2'}, timeout=180)
+            j = r.json()
+            if j.get('code') == 0 and (j['data'].get('completed') or j['data'].get('fileID')):
                 return 'ok'
-            _wcnzdbne = str(_dvzjgizw.get('message', ''))
-            if '频繁' in _wcnzdbne or 'exceed' in _wcnzdbne.lower() or _dvzjgizw.get('code') in (429, 401):
+            msg = str(j.get('message', ''))
+            if '频繁' in msg or 'exceed' in msg.lower() or j.get('code') in (429, 401):
                 if _retry < 8:
                     time.sleep(min(60, 5 * (_retry + 1)))
                     return self.upload(parent, name, data, _retry + 1)
             if _retry < 3:
                 time.sleep(3 * (_retry + 1))
                 return self.upload(parent, name, data, _retry + 1)
-            raise RuntimeError(f'upload {name} {_wcnzdbne[:120]}')
+            raise RuntimeError(f'upload {name} {msg[:120]}')
         except Exception as e:
             if _retry < 3:
                 time.sleep(3 * (_retry + 1))
@@ -148,111 +148,111 @@ _s = requests.Session()
 _s.trust_env = False
 _s.auth = (WD_USER, WD_PASS)
 
-def _olhjvveb(path):
-    _cypckzsq = _s.request('PROPFIND', WD + urllib.parse.quote(path, safe='/'), headers={'Depth': '1'}, timeout=60)
-    if _cypckzsq.status_code != 207:
-        raise RuntimeError(f'PROPFIND {path} -> {_cypckzsq.status_code} {_cypckzsq.text[:100]}')
-    _iujfbcro = re.findall('<D:href>(.*?)</D:href>', _cypckzsq.text)
-    if not _iujfbcro:
-        _iujfbcro = re.findall('<href>(.*?)</href>', _cypckzsq.text)
-    return [urllib.parse.unquote(_fcizagyd) for _fcizagyd in _iujfbcro]
+def _fcizagyd(path):
+    r = _s.request('PROPFIND', WD + urllib.parse.quote(path, safe='/'), headers={'Depth': '1'}, timeout=60)
+    if r.status_code != 207:
+        raise RuntimeError(f'PROPFIND {path} -> {r.status_code} {r.text[:100]}')
+    hrefs = re.findall('<D:href>(.*?)</D:href>', r.text)
+    if not hrefs:
+        hrefs = re.findall('<href>(.*?)</href>', r.text)
+    return [urllib.parse.unquote(h) for h in hrefs]
 
-def _ahtzsxfw(h):
-    if _fcizagyd.startswith('/webdav'):
-        return _fcizagyd[len('/webdav'):]
-    if '/webdav' in _fcizagyd:
-        return '/' + _fcizagyd.split('/webdav', 1)[-1].lstrip('/')
-    return _fcizagyd
+def _aqnzacqy(h):
+    if h.startswith('/webdav'):
+        return h[len('/webdav'):]
+    if '/webdav' in h:
+        return '/' + h.split('/webdav', 1)[-1].lstrip('/')
+    return h
 
-def _ioocghfh(path, out=None, _depth=0):
-    _kdrjjtbx = _kdrjjtbx or []
+def _wcnzdbne(path, out=None, _depth=0):
+    out = out or []
     if _depth > 8:
-        return _kdrjjtbx
-    for _fcizagyd in _olhjvveb(path):
-        _otkumxia = _ahtzsxfw(_fcizagyd)
-        if _otkumxia.rstrip('/') == path.rstrip('/'):
+        return out
+    for h in _fcizagyd(path):
+        rel = _aqnzacqy(h)
+        if rel.rstrip('/') == path.rstrip('/'):
             continue
-        _kdrjjtbx.append(_otkumxia)
-        if _otkumxia.endswith('/'):
-            _ioocghfh(_otkumxia.rstrip('/'), _kdrjjtbx, _depth + 1)
-    return _kdrjjtbx
+        out.append(rel)
+        if rel.endswith('/'):
+            _wcnzdbne(rel.rstrip('/'), out, _depth + 1)
+    return out
 
-def _pxyobtnw(wd_path, local):
-    _cypckzsq = _s.get(WD + urllib.parse.quote(wd_path, safe='/'), timeout=180, stream=True)
-    if _cypckzsq.status_code != 200:
-        raise RuntimeError(f'GET {wd_path} -> {_cypckzsq.status_code}')
-    with open(local, 'wb') as _gjzvwgnd:
-        for _xsxvxwpt in _cypckzsq.iter_content(1024 * 256):
-            _gjzvwgnd.write(_xsxvxwpt)
+def _xfwknvyc(wd_path, local):
+    r = _s.get(WD + urllib.parse.quote(wd_path, safe='/'), timeout=180, stream=True)
+    if r.status_code != 200:
+        raise RuntimeError(f'GET {wd_path} -> {r.status_code}')
+    with open(local, 'wb') as f:
+        for chunk in r.iter_content(1024 * 256):
+            f.write(chunk)
 
-def _gpyougkz():
+def _jjldsylb():
     if not os.path.exists(FANHAO_MAP):
         return {}
-    with open(FANHAO_MAP, encoding='utf-8-sig') as _gjzvwgnd:
-        return json.load(_gjzvwgnd)
-_FHM = _gpyougkz()
+    with open(FANHAO_MAP, encoding='utf-8-sig') as f:
+        return json.load(f)
+_FHM = _jjldsylb()
 
-def _ivweuthe(raw):
-    _xfmkzjez = str(raw or '').strip()
-    _xfmkzjez = _xfmkzjez.translate(str.maketrans('０１２３４５６７８９－', '0123456789-'))
-    _ignfimad = re.search('([子別史經集])?\\s*(\\d+\\s*-\\s*\\d+)', _xfmkzjez)
-    if not _ignfimad:
+def _hxyyugoj(raw):
+    s = str(raw or '').strip()
+    s = s.translate(str.maketrans('０１２３４５６７８９－', '0123456789-'))
+    m = re.search('([子別史經集])?\\s*(\\d+\\s*-\\s*\\d+)', s)
+    if not m:
         return None
-    _rdsfvooi = _ignfimad.group(1) or '子'
-    _cjoczgig = _ignfimad.group(2).replace(' ', '')
-    return f'{_rdsfvooi}{_cjoczgig}'
+    pref = m.group(1) or '子'
+    num = m.group(2).replace(' ', '')
+    return f'{pref}{num}'
 
-def _fmnoswwo(fn):
-    _zvlcxijm = None
-    _wruxkkpx = re.search('\\[番号\\]\\s*([^\\s\\.\\]]+)', fn)
-    if _wruxkkpx:
-        _zvlcxijm = _ivweuthe(_wruxkkpx.group(1))
-    _nknqbrbg = re.match('^([^\\.\\[]+)', fn)
-    _tusnmdkn = _nknqbrbg.group(1).strip() if _nknqbrbg else fn.strip()
-    _qtagfzym = re.search('\\.(\\d+)\\s*[冊册]', fn)
-    _zuktvrri = int(_qtagfzym.group(1)) if _qtagfzym else 1
-    _toxkdzbd = _FHM.get(_zvlcxijm) if _zvlcxijm else None
-    _xiljiugx = (_toxkdzbd or {}).get('title') or _tusnmdkn
-    _fapegfdm = (_toxkdzbd or {}).get('n_ce') or _zuktvrri
-    return (_zvlcxijm, _xiljiugx, _fapegfdm)
+def _ixeahvrd(fn):
+    fh = None
+    mfh = re.search('\\[番号\\]\\s*([^\\s\\.\\]]+)', fn)
+    if mfh:
+        fh = _hxyyugoj(mfh.group(1))
+    mtitle = re.match('^([^\\.\\[]+)', fn)
+    title_file = mtitle.group(1).strip() if mtitle else fn.strip()
+    mce = re.search('\\.(\\d+)\\s*[冊册]', fn)
+    n_file = int(mce.group(1)) if mce else 1
+    info = _FHM.get(fh) if fh else None
+    title = (info or {}).get('title') or title_file
+    n_ce = (info or {}).get('n_ce') or n_file
+    return (fh, title, n_ce)
 
-def _ttmnpack():
-    _afzecino = _ioocghfh(LIB_WD)
-    _pvbvxish = []
-    for _suidhumc in _afzecino:
-        if not _suidhumc.lower().endswith('.pdf'):
+def _iaoixqht():
+    items = _wcnzdbne(LIB_WD)
+    todo = []
+    for it in items:
+        if not it.lower().endswith('.pdf'):
             continue
-        _otkumxia = _suidhumc[len(LIB_WD):].lstrip('/')
-        if '/' in _otkumxia:
-            _zrunbsto, _gbazxfyk = _otkumxia.rsplit('/', 1)
-            _zvlcxijm, _xiljiugx, _fapegfdm = _fmnoswwo(_zrunbsto)
-            _fjzlcjbx = f'{_zvlcxijm} {_xiljiugx} 共{_fapegfdm}册' if _zvlcxijm else f'{_xiljiugx} 共{_fapegfdm}册'
-            _bmtebxmo = _gbazxfyk[:-4]
-            _pvbvxish.append({'wdav': _suidhumc, 'book': _fjzlcjbx, 'ce': _bmtebxmo, 'pdf_name': _gbazxfyk})
+        rel = it[len(LIB_WD):].lstrip('/')
+        if '/' in rel:
+            book_dir, ce_fn = rel.rsplit('/', 1)
+            fh, title, n_ce = _ixeahvrd(book_dir)
+            book_name = f'{fh} {title} 共{n_ce}册' if fh else f'{title} 共{n_ce}册'
+            ce = ce_fn[:-4]
+            todo.append({'wdav': it, 'book': book_name, 'ce': ce, 'pdf_name': ce_fn})
         else:
-            _qbygqqsm = _otkumxia[:-4]
-            _zvlcxijm, _xiljiugx, _fapegfdm = _fmnoswwo(_qbygqqsm)
-            _fjzlcjbx = f'{_zvlcxijm} {_xiljiugx} 共{_fapegfdm}册' if _zvlcxijm else f'{_xiljiugx} 共{_fapegfdm}册'
-            _bmtebxmo = _xiljiugx
-            _pvbvxish.append({'wdav': _suidhumc, 'book': _fjzlcjbx, 'ce': _bmtebxmo, 'pdf_name': _otkumxia})
+            fn = rel[:-4]
+            fh, title, n_ce = _ixeahvrd(fn)
+            book_name = f'{fh} {title} 共{n_ce}册' if fh else f'{title} 共{n_ce}册'
+            ce = title
+            todo.append({'wdav': it, 'book': book_name, 'ce': ce, 'pdf_name': rel})
 
-    def _ywotcfkl(x):
-        _ignfimad = re.search('(\\d+)', _hxyyugoj['ce'])
-        return int(_ignfimad.group(1)) if _ignfimad else 10 ** 9
-    _pvbvxish.sort(key=lambda x: (_hxyyugoj['book'], _ywotcfkl(_hxyyugoj)))
-    return _pvbvxish
-_pvbvxish = _ttmnpack()
-print(f"[scan] {LIB_WD} -> PDF 共 {len(_pvbvxish)} 册, book 数={len(set((t['book'] for t in _pvbvxish)))}", flush=True)
+    def _kdrjjtbx(x):
+        m = re.search('(\\d+)', x['ce'])
+        return int(m.group(1)) if m else 10 ** 9
+    todo.sort(key=lambda x: (x['book'], _kdrjjtbx(x)))
+    return todo
+todo = _iaoixqht()
+print(f"[scan] {LIB_WD} -> PDF 共 {len(todo)} 册, book 数={len(set((t['book'] for t in todo)))}", flush=True)
 done = set()
 if os.path.exists(LEDGER):
     for line in open(LEDGER, encoding='utf-8'):
         try:
-            _dvzjgizw = json.loads(line)
-            if _dvzjgizw.get('status') == 'ok':
-                done.add(_dvzjgizw.get('wdav') or _dvzjgizw.get('ce'))
+            j = json.loads(line)
+            if j.get('status') == 'ok':
+                done.add(j.get('wdav') or j.get('ce'))
         except:
             pass
-_pvbvxish = [t for t in _pvbvxish if t['wdav'] not in done and t['ce'] not in done]
+todo = [t for t in todo if t['wdav'] not in done and t['ce'] not in done]
 if LIST_FILE:
     _prefixes, _exacts = (set(), set())
     with open(LIST_FILE, encoding='utf-8-sig') as _f:
@@ -265,127 +265,127 @@ if LIST_FILE:
             else:
                 _prefixes.add(_line.rstrip('/'))
     _kept = []
-    for _t in _pvbvxish:
+    for _t in todo:
         _w = _t['wdav'].rstrip('/')
         if _w in _exacts or any((_w == p or _w.startswith(p + '/') for p in _prefixes)):
             _kept.append(_t)
-    _pvbvxish = _kept
-    print(f'[todo] 清单过滤后 {len(_pvbvxish)} 册', flush=True)
+    todo = _kept
+    print(f'[todo] 清单过滤后 {len(todo)} 册', flush=True)
 if args.offset > 0:
-    _pvbvxish = _pvbvxish[args.offset:]
+    todo = todo[args.offset:]
 if args.limit > 0:
-    _pvbvxish = _pvbvxish[:args.limit]
-print(f'[todo] 实跑 {len(_pvbvxish)} 册 (已跳过 ledger ok {len(done)})', flush=True)
-for t in _pvbvxish[:10]:
+    todo = todo[:args.limit]
+print(f'[todo] 实跑 {len(todo)} 册 (已跳过 ledger ok {len(done)})', flush=True)
+for t in todo[:10]:
     print('  ', t['wdav'], flush=True)
-pan = _sxoamlhh()
+pan = _gjzvwgnd()
 
-def _ulsprhrt(parent, name):
-    for _suidhumc in pan.list_dir(parent):
-        if _suidhumc['type'] == 1 and _suidhumc['filename'] == name:
-            return int(_suidhumc['fileId'])
+def _jbqcblda(parent, name):
+    for it in pan.list_dir(parent):
+        if it['type'] == 1 and it['filename'] == name:
+            return int(it['fileId'])
     return pan.mkdir(parent, name)
 
-def _ydqvwwsf():
-    _aomxndod = _ulsprhrt(0, '古籍')
-    _egkpkbdc = _ulsprhrt(_aomxndod, 'GufangP')
-    _lijdjurv = _ulsprhrt(_egkpkbdc, '古方webp')
-    _vxepgfde = _ulsprhrt(_lijdjurv, TOP_NAME)
+def _ocnpgylw():
+    d1 = _jbqcblda(0, '古籍')
+    d2 = _jbqcblda(d1, 'GufangP')
+    d3 = _jbqcblda(d2, '古方webp')
+    top = _jbqcblda(d3, TOP_NAME)
     if CAT_NAME:
-        _vxepgfde = _ulsprhrt(_vxepgfde, CAT_NAME)
-    return _vxepgfde
-TOP_FID = _ydqvwwsf()
+        top = _jbqcblda(top, CAT_NAME)
+    return top
+TOP_FID = _ocnpgylw()
 print(f'[target] 古方webp/{TOP_NAME} fid={TOP_FID}', flush=True)
 
-def _wkkgwuen(ce_fid):
-    return [_hxyyugoj['filename'] for _hxyyugoj in pan.list_dir(ce_fid) if _hxyyugoj['type'] == 0]
+def _eigezznn(ce_fid):
+    return [x['filename'] for x in pan.list_dir(ce_fid) if x['type'] == 0]
 
-def _bjrldhah(t):
-    _quiicaer = t['ce']
-    _tnwimcdv = os.path.join(TEMP, 'pdf_' + hashlib.md5(_quiicaer.encode()).hexdigest() + '.pdf')
-    for _grktuoez in range(1, 4):
+def _egjvxqxb(t):
+    ce_key = t['ce']
+    local_pdf = os.path.join(TEMP, 'pdf_' + hashlib.md5(ce_key.encode()).hexdigest() + '.pdf')
+    for attempt in range(1, 4):
         try:
-            _fpegggyn = time.time()
-            _pxyobtnw(t['wdav'], _tnwimcdv)
-            _ckeaueht = fitz.open(_tnwimcdv)
-            _uglezegq = _ckeaueht.page_count
-            _fjzlcjbx = t['book']
-            _roaetaiu = _ulsprhrt(TOP_FID, _fjzlcjbx)
-            _lskyowmt = _ulsprhrt(_roaetaiu, _quiicaer)
-            _yxcreyhy = set(_wkkgwuen(_lskyowmt))
-            if len(_yxcreyhy) >= _uglezegq and all((_gjzvwgnd.startswith('page_') and _gjzvwgnd.endswith('.webp') for _gjzvwgnd in _yxcreyhy)):
-                _ckeaueht.close()
-                _gpzxbhsh = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': _quiicaer, 'book': t['book'], 'pdf_name': t['pdf_name'], 'pages_pdf': _uglezegq, 'status': 'ok_cloud_skip', 'wdav': t['wdav']}
-                _jboheicw(_gpzxbhsh)
+            t0 = time.time()
+            _xfwknvyc(t['wdav'], local_pdf)
+            doc = fitz.open(local_pdf)
+            N = doc.page_count
+            book_name = t['book']
+            book_fid = _jbqcblda(TOP_FID, book_name)
+            ce_fid = _jbqcblda(book_fid, ce_key)
+            ex = set(_eigezznn(ce_fid))
+            if len(ex) >= N and all((f.startswith('page_') and f.endswith('.webp') for f in ex)):
+                doc.close()
+                rec = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': ce_key, 'book': t['book'], 'pdf_name': t['pdf_name'], 'pages_pdf': N, 'status': 'ok_cloud_skip', 'wdav': t['wdav']}
+                _jboheicw(rec)
                 with LG_LOCK:
                     stat['skip'] += 1
-                print(f'  [SKIP-cloud] {_quiicaer} 已在云端(N={_uglezegq})', flush=True)
+                print(f'  [SKIP-cloud] {ce_key} 已在云端(N={N})', flush=True)
                 return True
-            _wcelhbwi = queue.Queue(maxsize=max(8, args.upl_conc * 3))
-            _dqvcwyap = [0]
-            _dkehuhxq = threading.Lock()
+            q = queue.Queue(maxsize=max(8, args.upl_conc * 3))
+            ok_cnt = [0]
+            ulock = threading.Lock()
 
-            def _entdnurk():
+            def _wevguxeu():
                 while True:
-                    _swcrhpuq = _wcelhbwi.get()
-                    if _swcrhpuq is None:
-                        _wcelhbwi.task_done()
+                    item = q.get()
+                    if item is None:
+                        q.task_done()
                         break
-                    _vdysrmev, _oioueemp = _swcrhpuq
+                    name, data = item
                     try:
-                        pan.upload(_lskyowmt, _vdysrmev, _oioueemp)
-                        with _dkehuhxq:
-                            _dqvcwyap[0] += 1
+                        pan.upload(ce_fid, name, data)
+                        with ulock:
+                            ok_cnt[0] += 1
                     except Exception as e:
-                        print(f'    [upl-err] {_quiicaer}/{_vdysrmev} {str(e)[:80]}', flush=True)
-                    _wcelhbwi.task_done()
-            _erunqslo = [threading.Thread(target=_entdnurk, daemon=True) for _ibdraqbm in range(args.upl_conc)]
-            for _shpeclsi in _erunqslo:
-                _shpeclsi.start()
-            for _ehvyywvh in range(_uglezegq):
-                _azlfqlgk = _ckeaueht[_ehvyywvh]
-                _iscnkqxv = _azlfqlgk.get_pixmap(dpi=120)
-                _zufczind = Image.frombytes('RGB', (_iscnkqxv.width, _iscnkqxv.height), _iscnkqxv.samples)
-                if _iscnkqxv.width > 16383 or _iscnkqxv.height > 16383:
-                    _cypckzsq = 16383 / max(_iscnkqxv.width, _iscnkqxv.height)
-                    _zufczind = _zufczind.resize((int(_iscnkqxv.width * _cypckzsq), int(_iscnkqxv.height * _cypckzsq)), Image.LANCZOS)
-                _tylfvcsv = io.BytesIO()
-                _zufczind.save(_tylfvcsv, 'webp', quality=80, method=0)
-                _wcelhbwi.put((f'page_{_ehvyywvh + 1:04d}.webp', _tylfvcsv.getvalue()))
+                        print(f'    [upl-err] {ce_key}/{name} {str(e)[:80]}', flush=True)
+                    q.task_done()
+            threads = [threading.Thread(target=_wevguxeu, daemon=True) for _ in range(args.upl_conc)]
+            for th in threads:
+                th.start()
+            for i in range(N):
+                page = doc[i]
+                pix = page.get_pixmap(dpi=120)
+                img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
+                if pix.width > 16383 or pix.height > 16383:
+                    r = 16383 / max(pix.width, pix.height)
+                    img = img.resize((int(pix.width * r), int(pix.height * r)), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, 'webp', quality=80, method=0)
+                q.put((f'page_{i + 1:04d}.webp', buf.getvalue()))
                 del img, pix, buf
-            _ckeaueht.close()
-            for _ibdraqbm in _erunqslo:
-                _wcelhbwi.put(None)
-            for _shpeclsi in _erunqslo:
-                _shpeclsi.join()
-            _umtwrzaa = time.time() - _fpegggyn
-            if _dqvcwyap[0] == _uglezegq:
-                _gpzxbhsh = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': _quiicaer, 'book': t['book'], 'pdf_name': t['pdf_name'], 'pages_pdf': _uglezegq, 'pages_uploaded': _dqvcwyap[0], 'status': 'ok', 'elapsed_s': round(_umtwrzaa, 1), 'wdav': t['wdav']}
-                _jboheicw(_gpzxbhsh)
+            doc.close()
+            for _ in threads:
+                q.put(None)
+            for th in threads:
+                th.join()
+            elapsed = time.time() - t0
+            if ok_cnt[0] == N:
+                rec = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': ce_key, 'book': t['book'], 'pdf_name': t['pdf_name'], 'pages_pdf': N, 'pages_uploaded': ok_cnt[0], 'status': 'ok', 'elapsed_s': round(elapsed, 1), 'wdav': t['wdav']}
+                _jboheicw(rec)
                 with LG_LOCK:
                     stat['ok'] += 1
-                print(f"  [OK] {_quiicaer} · {_uglezegq}p · {_umtwrzaa:.0f}s (累计OK={stat['ok']})", flush=True)
+                print(f"  [OK] {ce_key} · {N}p · {elapsed:.0f}s (累计OK={stat['ok']})", flush=True)
                 return True
-            print(f'  [PARTIAL] {_quiicaer} {_dqvcwyap[0]}/{_uglezegq}', flush=True)
-            raise RuntimeError(f'upload partial {_dqvcwyap[0]}/{_uglezegq}')
+            print(f'  [PARTIAL] {ce_key} {ok_cnt[0]}/{N}', flush=True)
+            raise RuntimeError(f'upload partial {ok_cnt[0]}/{N}')
         except Exception as e:
-            print(f'  [FAIL-{_grktuoez}] {_quiicaer} {str(e)[:150]}', flush=True)
-            time.sleep(3 * _grktuoez)
+            print(f'  [FAIL-{attempt}] {ce_key} {str(e)[:150]}', flush=True)
+            time.sleep(3 * attempt)
         finally:
-            if os.path.exists(_tnwimcdv):
+            if os.path.exists(local_pdf):
                 try:
-                    os.remove(_tnwimcdv)
+                    os.remove(local_pdf)
                 except:
                     pass
-    _gpzxbhsh = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': _quiicaer, 'book': t['book'], 'pdf_name': t['pdf_name'], 'status': 'fail', 'wdav': t['wdav']}
-    _jboheicw(_gpzxbhsh)
+    rec = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': ce_key, 'book': t['book'], 'pdf_name': t['pdf_name'], 'status': 'fail', 'wdav': t['wdav']}
+    _jboheicw(rec)
     with LG_LOCK:
         stat['fail'] += 1
-    print(f'  [FAIL-FINAL] {_quiicaer}', flush=True)
+    print(f'  [FAIL-FINAL] {ce_key}', flush=True)
     return False
 print(f'[start] book并发={args.book_conc} 页并发={args.upl_conc}', flush=True)
-with ThreadPoolExecutor(max_workers=args.book_conc) as _yxcreyhy:
-    futs = {_yxcreyhy.submit(_bjrldhah, t): t for t in _pvbvxish}
+with ThreadPoolExecutor(max_workers=args.book_conc) as ex:
+    futs = {ex.submit(_egjvxqxb, t): t for t in todo}
     for fu in as_completed(futs):
         try:
             fu.result()
