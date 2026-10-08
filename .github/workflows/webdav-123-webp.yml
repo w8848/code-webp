@@ -24,9 +24,9 @@ on:
         required: false
         default: '2'
       upl_conc:
-        description: '页并发数'
+        description: '页并发数(官方限制每账号≤20线程, 三仓合计≤18)'
         required: false
-        default: '4'
+        default: '3'
       list_file:
         description: '增量清单文件名(私有数据仓, 每行一个PDF绝对路径或书级目录路径)，空=整库'
         required: false
