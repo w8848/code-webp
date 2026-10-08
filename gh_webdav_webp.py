@@ -48,7 +48,7 @@ class _gjzvwgnd:
         self.tok = None
         self.lock = threading.Lock()
 
-    def _sxoamlhh(self, _retry=0):
+    def _login(self, _retry=0):
         try:
             r = self.s.post(B123 + '/api/v1/access_token', headers={'Platform': 'open_platform'}, json={'clientID': self.cfg['client_id'], 'clientSecret': self.cfg['client_secret']}, timeout=90)
             r = r.json()
@@ -62,7 +62,7 @@ class _gjzvwgnd:
         if not self.tok:
             raise RuntimeError('123 token 失败: ' + str(r)[:200])
 
-    def _jobgcrjv(self, method, path, body=None, params=None, _retry=0):
+    def call(self, method, path, body=None, params=None, _retry=0):
         with self.lock:
             if not self.tok:
                 self._login()
@@ -93,7 +93,7 @@ class _gjzvwgnd:
                 return self.call(method, path, body, params, _retry + 1)
         raise RuntimeError(f'123 {path} code={code} {msg[:120]}')
 
-    def _mpoobazl(self, fid):
+    def list_dir(self, fid):
         out, last = ([], 0)
         while True:
             j = self.call('GET', '/api/v2/file/list', params={'parentFileId': fid, 'limit': 100, 'lastFileId': last})
@@ -104,11 +104,11 @@ class _gjzvwgnd:
                 break
         return [x for x in out if x.get('trashed', 0) == 0]
 
-    def _cypckzsq(self, parent, name):
+    def mkdir(self, parent, name):
         j = self.call('POST', '/upload/v1/file/mkdir', body={'parentID': str(parent), 'name': name})
         return int(j['data']['dirID'])
 
-    def _tckelbcx(self):
+    def upload_domain(self):
         with self.lock:
             if getattr(self, '_updom', None):
                 return self._updom
@@ -118,7 +118,7 @@ class _gjzvwgnd:
             self._updom = dom
         return dom
 
-    def _dvzjgizw(self, parent, name, data, _retry=0):
+    def upload(self, parent, name, data, _retry=0):
         etag = hashlib.md5(data).hexdigest()
         try:
             dom = self.upload_domain()
@@ -148,7 +148,7 @@ _s = requests.Session()
 _s.trust_env = False
 _s.auth = (WD_USER, WD_PASS)
 
-def _fcizagyd(path):
+def _sxoamlhh(path):
     r = _s.request('PROPFIND', WD + urllib.parse.quote(path, safe='/'), headers={'Depth': '1'}, timeout=60)
     if r.status_code != 207:
         raise RuntimeError(f'PROPFIND {path} -> {r.status_code} {r.text[:100]}')
@@ -157,27 +157,27 @@ def _fcizagyd(path):
         hrefs = re.findall('<href>(.*?)</href>', r.text)
     return [urllib.parse.unquote(h) for h in hrefs]
 
-def _aqnzacqy(h):
+def _jobgcrjv(h):
     if h.startswith('/webdav'):
         return h[len('/webdav'):]
     if '/webdav' in h:
         return '/' + h.split('/webdav', 1)[-1].lstrip('/')
     return h
 
-def _wcnzdbne(path, out=None, _depth=0):
+def _mpoobazl(path, out=None, _depth=0):
     out = out or []
     if _depth > 8:
         return out
-    for h in _fcizagyd(path):
-        rel = _aqnzacqy(h)
+    for h in _sxoamlhh(path):
+        rel = _jobgcrjv(h)
         if rel.rstrip('/') == path.rstrip('/'):
             continue
         out.append(rel)
         if rel.endswith('/'):
-            _wcnzdbne(rel.rstrip('/'), out, _depth + 1)
+            _mpoobazl(rel.rstrip('/'), out, _depth + 1)
     return out
 
-def _xfwknvyc(wd_path, local):
+def _cypckzsq(wd_path, local):
     r = _s.get(WD + urllib.parse.quote(wd_path, safe='/'), timeout=180, stream=True)
     if r.status_code != 200:
         raise RuntimeError(f'GET {wd_path} -> {r.status_code}')
@@ -185,14 +185,14 @@ def _xfwknvyc(wd_path, local):
         for chunk in r.iter_content(1024 * 256):
             f.write(chunk)
 
-def _jjldsylb():
+def _tckelbcx():
     if not os.path.exists(FANHAO_MAP):
         return {}
     with open(FANHAO_MAP, encoding='utf-8-sig') as f:
         return json.load(f)
-_FHM = _jjldsylb()
+_FHM = _tckelbcx()
 
-def _hxyyugoj(raw):
+def _dvzjgizw(raw):
     s = str(raw or '').strip()
     s = s.translate(str.maketrans('０１２３４５６７８９－', '0123456789-'))
     m = re.search('([子別史經集])?\\s*(\\d+\\s*-\\s*\\d+)', s)
@@ -202,11 +202,11 @@ def _hxyyugoj(raw):
     num = m.group(2).replace(' ', '')
     return f'{pref}{num}'
 
-def _ixeahvrd(fn):
+def _fcizagyd(fn):
     fh = None
     mfh = re.search('\\[番号\\]\\s*([^\\s\\.\\]]+)', fn)
     if mfh:
-        fh = _hxyyugoj(mfh.group(1))
+        fh = _dvzjgizw(mfh.group(1))
     mtitle = re.match('^([^\\.\\[]+)', fn)
     title_file = mtitle.group(1).strip() if mtitle else fn.strip()
     mce = re.search('\\.(\\d+)\\s*[冊册]', fn)
@@ -216,8 +216,8 @@ def _ixeahvrd(fn):
     n_ce = (info or {}).get('n_ce') or n_file
     return (fh, title, n_ce)
 
-def _iaoixqht():
-    items = _wcnzdbne(LIB_WD)
+def _aqnzacqy():
+    items = _mpoobazl(LIB_WD)
     todo = []
     for it in items:
         if not it.lower().endswith('.pdf'):
@@ -225,23 +225,23 @@ def _iaoixqht():
         rel = it[len(LIB_WD):].lstrip('/')
         if '/' in rel:
             book_dir, ce_fn = rel.rsplit('/', 1)
-            fh, title, n_ce = _ixeahvrd(book_dir)
+            fh, title, n_ce = _fcizagyd(book_dir)
             book_name = f'{fh} {title} 共{n_ce}册' if fh else f'{title} 共{n_ce}册'
             ce = ce_fn[:-4]
             todo.append({'wdav': it, 'book': book_name, 'ce': ce, 'pdf_name': ce_fn})
         else:
             fn = rel[:-4]
-            fh, title, n_ce = _ixeahvrd(fn)
+            fh, title, n_ce = _fcizagyd(fn)
             book_name = f'{fh} {title} 共{n_ce}册' if fh else f'{title} 共{n_ce}册'
             ce = title
             todo.append({'wdav': it, 'book': book_name, 'ce': ce, 'pdf_name': rel})
 
-    def _kdrjjtbx(x):
+    def _wcnzdbne(x):
         m = re.search('(\\d+)', x['ce'])
         return int(m.group(1)) if m else 10 ** 9
-    todo.sort(key=lambda x: (x['book'], _kdrjjtbx(x)))
+    todo.sort(key=lambda x: (x['book'], _wcnzdbne(x)))
     return todo
-todo = _iaoixqht()
+todo = _aqnzacqy()
 print(f"[scan] {LIB_WD} -> PDF 共 {len(todo)} 册, book 数={len(set((t['book'] for t in todo)))}", flush=True)
 done = set()
 if os.path.exists(LEDGER):
@@ -280,39 +280,39 @@ for t in todo[:10]:
     print('  ', t['wdav'], flush=True)
 pan = _gjzvwgnd()
 
-def _jbqcblda(parent, name):
+def _xfwknvyc(parent, name):
     for it in pan.list_dir(parent):
         if it['type'] == 1 and it['filename'] == name:
             return int(it['fileId'])
     return pan.mkdir(parent, name)
 
-def _ocnpgylw():
-    d1 = _jbqcblda(0, '古籍')
-    d2 = _jbqcblda(d1, 'GufangP')
-    d3 = _jbqcblda(d2, '古方webp')
-    top = _jbqcblda(d3, TOP_NAME)
+def _jjldsylb():
+    d1 = _xfwknvyc(0, '古籍')
+    d2 = _xfwknvyc(d1, 'GufangP')
+    d3 = _xfwknvyc(d2, '古方webp')
+    top = _xfwknvyc(d3, TOP_NAME)
     if CAT_NAME:
-        top = _jbqcblda(top, CAT_NAME)
+        top = _xfwknvyc(top, CAT_NAME)
     return top
-TOP_FID = _ocnpgylw()
+TOP_FID = _jjldsylb()
 print(f'[target] 古方webp/{TOP_NAME} fid={TOP_FID}', flush=True)
 
-def _eigezznn(ce_fid):
+def _hxyyugoj(ce_fid):
     return [x['filename'] for x in pan.list_dir(ce_fid) if x['type'] == 0]
 
-def _egjvxqxb(t):
+def _ixeahvrd(t):
     ce_key = t['ce']
     local_pdf = os.path.join(TEMP, 'pdf_' + hashlib.md5(ce_key.encode()).hexdigest() + '.pdf')
     for attempt in range(1, 4):
         try:
             t0 = time.time()
-            _xfwknvyc(t['wdav'], local_pdf)
+            _cypckzsq(t['wdav'], local_pdf)
             doc = fitz.open(local_pdf)
             N = doc.page_count
             book_name = t['book']
-            book_fid = _jbqcblda(TOP_FID, book_name)
-            ce_fid = _jbqcblda(book_fid, ce_key)
-            ex = set(_eigezznn(ce_fid))
+            book_fid = _xfwknvyc(TOP_FID, book_name)
+            ce_fid = _xfwknvyc(book_fid, ce_key)
+            ex = set(_hxyyugoj(ce_fid))
             if len(ex) >= N and all((f.startswith('page_') and f.endswith('.webp') for f in ex)):
                 doc.close()
                 rec = {'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'acct': 'guji', 'ce': ce_key, 'book': t['book'], 'pdf_name': t['pdf_name'], 'pages_pdf': N, 'status': 'ok_cloud_skip', 'wdav': t['wdav']}
@@ -325,7 +325,7 @@ def _egjvxqxb(t):
             ok_cnt = [0]
             ulock = threading.Lock()
 
-            def _wevguxeu():
+            def _iaoixqht():
                 while True:
                     item = q.get()
                     if item is None:
@@ -339,7 +339,7 @@ def _egjvxqxb(t):
                     except Exception as e:
                         print(f'    [upl-err] {ce_key}/{name} {str(e)[:80]}', flush=True)
                     q.task_done()
-            threads = [threading.Thread(target=_wevguxeu, daemon=True) for _ in range(args.upl_conc)]
+            threads = [threading.Thread(target=_iaoixqht, daemon=True) for _ in range(args.upl_conc)]
             for th in threads:
                 th.start()
             for i in range(N):
@@ -385,7 +385,7 @@ def _egjvxqxb(t):
     return False
 print(f'[start] book并发={args.book_conc} 页并发={args.upl_conc}', flush=True)
 with ThreadPoolExecutor(max_workers=args.book_conc) as ex:
-    futs = {ex.submit(_egjvxqxb, t): t for t in todo}
+    futs = {ex.submit(_ixeahvrd, t): t for t in todo}
     for fu in as_completed(futs):
         try:
             fu.result()
